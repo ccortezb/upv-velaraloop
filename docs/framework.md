@@ -47,7 +47,7 @@ DISCOVER → DEFINE → BUILD → SHIP → GOVERN → LEARN
 - Prioritized backlog (RICE, MoSCoW, or Kano)
 - Success metrics (OKRs, North Star Metric)
 
-**Frameworks used:** Story Mapping, RICE, MoSCoW, OKRs, Kano Model, Spec-Driven Development
+**Frameworks used:** Story Mapping, RICE, MoSCoW, OKRs, Kano Model, Spec-Driven Development (SR. Moks Model )
 
 **Output:** SoW + Prioritized Backlog (ready for AI execution)
 
