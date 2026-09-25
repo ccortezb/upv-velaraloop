@@ -90,7 +90,7 @@ Objetivo: usar coding agents para automatizar tareas reales del trabajo — **si
 - Primer comando: pedirle al agente que te explique qué ve en la carpeta.
 - **Práctica:** agente instalado y respondiendo en <30 min.
 
-### B3 · `soy-tarea`
+### B3 · `sow-tarea`
 - Convertir una tarea de trabajo en una **especificación (SoW de tarea)**.
 - Las 5 secciones: objetivo, inputs, criterios de éxito, límites, entregable.
 - Diferencias: SoW de tarea (reporte, procesar datos) vs SoW de producto.

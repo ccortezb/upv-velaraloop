@@ -135,7 +135,7 @@ Verificación: [antes de guardar, muéstrame el resultado]
 
 Ya diste el primer paso: pasaste de "preguntar" a "delegar". Los siguientes módulos profundizan:
 
-- `soy-tarea` — convertir cualquier tarea tuya en especificación (el SoW de tarea)
+- `sow-tarea` — convertir cualquier tarea tuya en especificación (el SoW de tarea)
 - `automatiza-reportes` — reportes y análisis
 - `automatiza-datos` — CSV/Excel
 - `automatiza-docs` — documentación, minutas, propuestas
