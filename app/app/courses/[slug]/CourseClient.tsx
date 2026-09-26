@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
 import Markdown from "@/components/Markdown";
+import MiniQuiz from "@/components/MiniQuiz";
+import FinalQuiz from "@/components/FinalQuiz";
 import {
   getCourse,
   getEnrollments,
@@ -16,6 +18,14 @@ import {
   type AcademyCourse,
   type AcademyLesson,
 } from "@/lib/academy-api";
+
+const TYPE_LABEL: Record<string, string> = {
+  reading: "Lectura",
+  video: "Video",
+  exercise: "Ejercicio",
+  project: "Proyecto",
+  workshop: "Workshop",
+};
 
 export default function CourseClient({ slug }: { slug: string }) {
   const { user, loading: authLoading } = useAuth();
@@ -235,7 +245,7 @@ export default function CourseClient({ slug }: { slug: string }) {
           {lesson ? (
             <article className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
               <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--text-muted)]">
-                {lesson.moduleId} · {lesson.type}
+                {lesson.moduleId} · {TYPE_LABEL[lesson.type] ?? lesson.type}
               </p>
               <h2 className="mb-4">{lesson.title}</h2>
 
@@ -259,6 +269,10 @@ export default function CourseClient({ slug }: { slug: string }) {
                 </p>
               )}
 
+              {lesson.miniQuiz && lesson.miniQuiz.length > 0 && (
+                <MiniQuiz questions={lesson.miniQuiz} />
+              )}
+
               {enrolled && lesson.content && (
                 <div className="mt-6 border-t border-[var(--border-default)] pt-4">
                   <button
@@ -280,6 +294,16 @@ export default function CourseClient({ slug }: { slug: string }) {
           )}
         </section>
       </div>
+
+      {enrolled && course.finalQuiz && course.finalQuiz.length > 0 && (
+        <div className="mt-12">
+          <h2 className="mb-1">Evaluación final</h2>
+          <p className="mb-5 text-sm text-[var(--text-secondary)]">
+            Aprueba con 80% para obtener el credential.
+          </p>
+          <FinalQuiz courseId={course.id} questions={course.finalQuiz} />
+        </div>
+      )}
     </main>
   );
 }

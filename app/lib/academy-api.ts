@@ -5,15 +5,29 @@ import { auth, db } from "@/lib/firebase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.upvelara.com";
 
+export interface MiniQuizQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+  answer: number;
+}
+
+export interface FinalQuizQuestion {
+  id: string;
+  prompt: string;
+  options: string[];
+}
+
 export interface AcademyLesson {
   id: string;
   moduleId: string;
   title: string;
-  type: "video" | "reading" | "exercise";
+  type: "video" | "reading" | "exercise" | "project" | "workshop";
   order: number;
   locked: boolean;
   videoUrl: string | null;
   content: string | null;
+  miniQuiz: MiniQuizQuestion[] | null;
 }
 
 export interface AcademyCourse {
@@ -30,6 +44,8 @@ export interface AcademyCourse {
   locked: boolean;
   lessonCount: number;
   completedCount: number;
+  finalQuiz: FinalQuizQuestion[] | null;
+  finalQuizCount: number;
   lessons: AcademyLesson[];
 }
 
@@ -165,6 +181,29 @@ export async function markLessonComplete(
   await setDoc(ref, { progress, updatedAt: new Date().toISOString() });
 
   return { ok: true, completedLessons: completed, courseCompleted: false };
+}
+
+export async function submitFinalQuiz(
+  courseId: string,
+  answers: Record<string, number>
+): Promise<{
+  score: number;
+  correct: number;
+  total: number;
+  threshold: number;
+  passed: boolean;
+  credential: string | null;
+  review: { id: string; correct: boolean; answer: number; explanation: string | null }[];
+}> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  Object.assign(headers, await authHeader());
+  const res = await fetch(`${API_BASE}/academy/quiz/${courseId}`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ answers }),
+  });
+  if (!res.ok) throw new Error(`Quiz submit failed: ${res.status}`);
+  return res.json();
 }
 
 export function trackLabel(track: "A" | "B" | "C"): string {
