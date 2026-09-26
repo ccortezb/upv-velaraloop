@@ -122,7 +122,12 @@ export async function getEnrollments(): Promise<Enrollment[]> {
   const snap = await getDoc(enrollmentsRef(user.uid));
   if (!snap.exists()) return [];
   const data = snap.data() as { courses?: Enrollment[] };
-  return Array.isArray(data.courses) ? data.courses : [];
+  const list = Array.isArray(data.courses) ? data.courses : [];
+  return list.map((e: any) => ({
+    ...e,
+    courseId: e?.courseId ?? e?.slug ?? "",
+    slug: e?.slug ?? e?.courseId ?? "",
+  }));
 }
 
 export async function getProgress(): Promise<Record<string, any>> {

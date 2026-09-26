@@ -71,14 +71,15 @@ export default function MyLearningPage() {
         <div className="space-y-3">
           {enrollments.map((e) => {
             const done = e.progress?.completedLessons?.length ?? 0;
+            const slug = e.slug || e.courseId || "curso";
             return (
               <Link
-                key={e.courseId}
-                href={`/courses/${e.slug}`}
+                key={e.courseId || slug}
+                href={`/courses/${slug}`}
                 className="card-hover flex items-center justify-between gap-4 rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-5"
               >
                 <div>
-                  <h3 className="mb-0.5 text-[var(--text-primary)]">{e.slug.replace(/-/g, " ")}</h3>
+                  <h3 className="mb-0.5 text-[var(--text-primary)]">{slug.replace(/-/g, " ")}</h3>
                   <p className="text-xs text-[var(--text-muted)]">
                     {e.source === "free" ? "Gratis" : "Comprado"} · {done} lecciones completadas
                     {e.progress?.completed ? " · ✓ Curso completado" : ""}

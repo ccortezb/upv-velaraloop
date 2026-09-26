@@ -44,8 +44,10 @@ export default function CertificatesPage() {
       .finally(() => setLoading(false));
   }, [user, authLoading]);
 
-  const titleFor = (courseId: string, fallback?: string) =>
-    fallback || courses.find((c) => c.id === courseId || c.slug === courseId)?.title || courseId.replace(/-/g, " ");
+  const titleFor = (courseId?: string, fallback?: string) =>
+    fallback ||
+    (courseId ? courses.find((c) => c.id === courseId || c.slug === courseId)?.title : undefined) ||
+    (courseId || "curso").replace(/-/g, " ");
 
   if (authLoading || loading) {
     return (
