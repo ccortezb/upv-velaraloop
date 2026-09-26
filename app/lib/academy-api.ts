@@ -28,6 +28,9 @@ export interface AcademyLesson {
   videoUrl: string | null;
   content: string | null;
   miniQuiz: MiniQuizQuestion[] | null;
+  phase?: string | null;
+  quote?: string | null;
+  references?: { label: string; url: string }[] | null;
 }
 
 export interface AcademyCourse {
@@ -46,6 +49,8 @@ export interface AcademyCourse {
   completedCount: number;
   finalQuiz: FinalQuizQuestion[] | null;
   finalQuizCount: number;
+  finalQuizBankSize: number;
+  finalQuizAttempts: number;
   lessons: AcademyLesson[];
 }
 
@@ -159,6 +164,20 @@ export async function enroll(
   return { enrolled: true };
 }
 
+export async function updateCourseProgress(courseId: string, patch: Record<string, any>): Promise<void> {
+  const user = auth?.currentUser;
+  if (!user || !db) return;
+  const ref = progressRef(user.uid);
+  const snap = await getDoc(ref);
+  const progress: Record<string, any> = snap.exists() ? ((snap.data() as any).progress ?? {}) : {};
+  progress[courseId] = {
+    ...(progress[courseId] ?? { completedLessons: [] }),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  await setDoc(ref, { progress, updatedAt: new Date().toISOString() });
+}
+
 export async function markLessonComplete(
   courseId: string,
   lessonId: string
@@ -183,8 +202,23 @@ export async function markLessonComplete(
   return { ok: true, completedLessons: completed, courseCompleted: false };
 }
 
+export async function getFinalQuizSet(courseId: string): Promise<{
+  count: number;
+  bankSize: number;
+  threshold: number;
+  attemptsAllowed: number;
+  questions: FinalQuizQuestion[];
+}> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  Object.assign(headers, await authHeader());
+  const res = await fetch(`${API_BASE}/academy/quiz/${courseId}`, { headers });
+  if (!res.ok) throw new Error(`Quiz fetch failed: ${res.status}`);
+  return res.json();
+}
+
 export async function submitFinalQuiz(
   courseId: string,
+  questionIds: string[],
   answers: Record<string, number>
 ): Promise<{
   score: number;
@@ -200,7 +234,7 @@ export async function submitFinalQuiz(
   const res = await fetch(`${API_BASE}/academy/quiz/${courseId}`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ answers }),
+    body: JSON.stringify({ questionIds, answers }),
   });
   if (!res.ok) throw new Error(`Quiz submit failed: ${res.status}`);
   return res.json();

@@ -1,16 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MiniQuizQuestion } from "@/lib/academy-api";
 
-export default function MiniQuiz({ questions }: { questions: MiniQuizQuestion[] }) {
+export default function MiniQuiz({
+  questions,
+  onComplete,
+}: {
+  questions: MiniQuizQuestion[];
+  onComplete?: (correct: number, total: number) => void;
+}) {
   const [selected, setSelected] = useState<Record<string, number>>({});
 
-  if (!questions || questions.length === 0) return null;
-
   const answered = Object.keys(selected).length;
-  const correct = questions.filter((q) => selected[q.id] === q.answer).length;
-  const done = answered === questions.length;
+  const correct = questions?.filter((q) => selected[q.id] === q.answer).length ?? 0;
+  const done = !!questions && questions.length > 0 && answered === questions.length;
+
+  useEffect(() => {
+    if (done && onComplete) onComplete(correct, questions.length);
+  }, [done, correct, questions, onComplete]);
+
+  if (!questions || questions.length === 0) return null;
 
   return (
     <div className="mt-8 rounded-lg border border-[var(--brand-primary-border)] bg-[var(--brand-primary-muted)] p-5">
