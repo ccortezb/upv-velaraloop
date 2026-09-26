@@ -4,9 +4,11 @@ import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
+import Markdown from "@/components/Markdown";
 import {
   getCourse,
   getEnrollments,
+  getProgress,
   enroll,
   markLessonComplete,
   trackLabel,
@@ -35,10 +37,11 @@ export default function CourseClient({ slug }: { slug: string }) {
       setSelected((prev) => prev ?? data.lessons[0]?.id ?? null);
 
       if (user) {
-        const enr = await getEnrollments();
+        const [enr, prog] = await Promise.all([getEnrollments(), getProgress()]);
         const mine = enr.find((e) => e.courseId === data.id);
         setEnrolled(!!mine);
-        if (mine) setCompleted(mine.progress?.completedLessons ?? []);
+        const done = prog[data.id]?.completedLessons;
+        setCompleted(Array.isArray(done) ? done : []);
       }
     } catch {
       setError("No se pudo cargar el curso.");
@@ -57,13 +60,17 @@ export default function CourseClient({ slug }: { slug: string }) {
     setNotice(null);
     try {
       const res = await enroll(course.id);
-      if (res.ok && res.data.enrolled) {
+      if (res.enrolled) {
         setEnrolled(true);
         setNotice("¡Listo! Ya estás inscrito. Empieza con la primera lección.");
         await load();
-      } else if (res.data.requiresPayment) {
+      } else if (res.requiresPayment) {
         setNotice("Este curso requiere pago. Completa el checkout y tu acceso se activará.");
+      } else if (res.message) {
+        setNotice(res.message);
       }
+    } catch {
+      setNotice("No se pudo inscribir. Intenta de nuevo.");
     } finally {
       setBusy(false);
     }
@@ -75,8 +82,10 @@ export default function CourseClient({ slug }: { slug: string }) {
     try {
       const res = await markLessonComplete(course.id, selected);
       if (res.ok) {
-        setCompleted(res.data.completedLessons);
+        setCompleted(res.completedLessons);
       }
+    } catch {
+      setNotice("No se pudo guardar el progreso. Intenta de nuevo.");
     } finally {
       setBusy(false);
     }
@@ -243,7 +252,7 @@ export default function CourseClient({ slug }: { slug: string }) {
               ) : null}
 
               {lesson.content ? (
-                <p className="whitespace-pre-line text-[var(--text-secondary)]">{lesson.content}</p>
+                <Markdown content={lesson.content} />
               ) : (
                 <p className="text-[var(--text-muted)]">
                   🔒 Contenido bloqueado. Inscríbete (o compra el acceso) para verlo.

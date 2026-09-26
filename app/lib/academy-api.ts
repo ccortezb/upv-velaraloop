@@ -1,6 +1,7 @@
 "use client";
 
-import { auth } from "@/lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "@/lib/firebase";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "https://api.upvelara.com";
 
@@ -52,8 +53,10 @@ export interface Enrollment {
   purchased: boolean;
   source: string;
   enrolledAt: string;
-  progress: { completedLessons: string[]; quizScore: number | null; completed?: boolean };
+  progress?: { completedLessons: string[]; quizScore: number | null; completed?: boolean };
 }
+
+// ─── Catalog (public API) ────────────────────────────────────────────────────
 
 async function authHeader(): Promise<Record<string, string>> {
   const user = auth?.currentUser;
@@ -66,24 +69,12 @@ async function authHeader(): Promise<Record<string, string>> {
   }
 }
 
-async function apiGet<T>(path: string, authRequired = false): Promise<T> {
+async function apiGet<T>(path: string): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authRequired || auth?.currentUser) Object.assign(headers, await authHeader());
+  if (auth?.currentUser) Object.assign(headers, await authHeader());
   const res = await fetch(`${API_BASE}${path}`, { headers });
   if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
   return res.json() as Promise<T>;
-}
-
-async function apiPost<T>(path: string, body: unknown): Promise<{ ok: boolean; status: number; data: T }> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  Object.assign(headers, await authHeader());
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => ({}))) as T;
-  return { ok: res.ok, status: res.status, data };
 }
 
 export async function getCourses(): Promise<{ count: number; totalLessons: number; courses: CourseSummary[] }> {
@@ -95,22 +86,85 @@ export async function getCourse(slug: string): Promise<AcademyCourse> {
   return data.course;
 }
 
+// ─── User data (Firestore client SDK — same path the API reads) ───────────────
+
+function enrollmentsRef(uid: string) {
+  return doc(db!, "users", uid, "tools", "academy-enrollments");
+}
+function progressRef(uid: string) {
+  return doc(db!, "users", uid, "tools", "academy-progress");
+}
+
 export async function getEnrollments(): Promise<Enrollment[]> {
-  const data = await apiGet<{ enrollments: Enrollment[] }>("/academy/enrollments", true);
-  return data.enrollments;
+  const user = auth?.currentUser;
+  if (!user || !db) return [];
+  const snap = await getDoc(enrollmentsRef(user.uid));
+  if (!snap.exists()) return [];
+  const data = snap.data() as { courses?: Enrollment[] };
+  return Array.isArray(data.courses) ? data.courses : [];
 }
 
-export async function enroll(courseId: string) {
-  return apiPost<{ enrolled: boolean; requiresPayment?: boolean; message?: string }>("/academy/enroll", {
-    courseId,
-  });
+export async function getProgress(): Promise<Record<string, any>> {
+  const user = auth?.currentUser;
+  if (!user || !db) return {};
+  const snap = await getDoc(progressRef(user.uid));
+  if (!snap.exists()) return {};
+  const data = snap.data() as { progress?: Record<string, any> };
+  return data.progress && typeof data.progress === "object" ? data.progress : {};
 }
 
-export async function markLessonComplete(courseId: string, lessonId: string) {
-  return apiPost<{ ok: boolean; completedLessons: string[]; courseCompleted: boolean }>("/academy/progress", {
-    courseId,
-    lessonId,
-  });
+export async function enroll(
+  courseId: string
+): Promise<{ enrolled: boolean; requiresPayment?: boolean; message?: string }> {
+  const user = auth?.currentUser;
+  if (!user || !db) return { enrolled: false, message: "Inicia sesión para inscribirte." };
+
+  const ref = enrollmentsRef(user.uid);
+  const snap = await getDoc(ref);
+  const existing: Enrollment[] = snap.exists() ? ((snap.data() as any).courses ?? []) : [];
+  if (existing.some((e) => e.courseId === courseId)) return { enrolled: true, message: "Ya estás inscrito." };
+
+  const { courses } = await getCourses();
+  const course = courses.find((c) => c.id === courseId || c.slug === courseId);
+  if (!course) return { enrolled: false, message: "Curso no encontrado." };
+  if (course.price > 0) {
+    return { enrolled: false, requiresPayment: true, message: "Este curso requiere pago." };
+  }
+
+  const entry: Enrollment = {
+    courseId: course.id,
+    slug: course.slug,
+    status: "active",
+    purchased: false,
+    source: "free",
+    enrolledAt: new Date().toISOString(),
+  };
+  await setDoc(ref, { courses: [...existing, entry], updatedAt: new Date().toISOString() });
+  return { enrolled: true };
+}
+
+export async function markLessonComplete(
+  courseId: string,
+  lessonId: string
+): Promise<{ ok: boolean; completedLessons: string[]; courseCompleted: boolean }> {
+  const user = auth?.currentUser;
+  if (!user || !db) throw new Error("Inicia sesión para guardar progreso.");
+
+  const ref = progressRef(user.uid);
+  const snap = await getDoc(ref);
+  const progress: Record<string, any> = snap.exists() ? ((snap.data() as any).progress ?? {}) : {};
+  const current = progress[courseId] ?? { completedLessons: [] };
+  const completed: string[] = Array.isArray(current.completedLessons) ? [...current.completedLessons] : [];
+  if (!completed.includes(lessonId)) completed.push(lessonId);
+
+  progress[courseId] = {
+    ...current,
+    completedLessons: completed,
+    updatedAt: new Date().toISOString(),
+  };
+  await setDoc(ref, { progress, updatedAt: new Date().toISOString() });
+
+  return { ok: true, completedLessons: completed, courseCompleted: false };
 }
 
 export function trackLabel(track: "A" | "B" | "C"): string {
