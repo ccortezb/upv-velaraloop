@@ -24,6 +24,17 @@ export default function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
+          <Link
+            href="/courses"
+            className={`rounded-md px-2 py-1 text-xs font-medium ${
+              isActive("/courses")
+                ? "bg-[var(--brand-primary-muted)] text-[var(--brand-primary)]"
+                : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)] hover:text-[var(--text-primary)]"
+            }`}
+          >
+            Academy
+          </Link>
+          <span className="mx-1 text-[var(--text-disabled)]">·</span>
           {PHASES.map((phase) => (
             <Link
               key={phase.id}
@@ -44,6 +55,16 @@ export default function Navbar() {
             <div className="h-8 w-24 animate-pulse rounded-md bg-[var(--bg-surface-hover)]" />
           ) : user ? (
             <>
+              <Link
+                href="/my-learning"
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  isActive("/my-learning")
+                    ? "bg-[var(--brand-primary-muted)] text-[var(--brand-primary)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
+                }`}
+              >
+                Mi aprendizaje
+              </Link>
               <Link
                 href="/project"
                 className={`rounded-md px-3 py-1.5 text-sm font-medium ${
