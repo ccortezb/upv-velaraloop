@@ -120,10 +120,15 @@ export default function CourseClient({ slug }: { slug: string }) {
     }
   };
 
-  const handleQuizFinish = async (passed: boolean, score: number) => {
+  const handleQuizFinish = async (passed: boolean, score: number, certificateId: string | null) => {
     if (!course) return;
     const attempts = (progress.quizAttempts ?? 0) + 1;
-    const patch = { quizAttempts: attempts, quizScore: score, quizPassed: passed || progress.quizPassed };
+    const patch = {
+      quizAttempts: attempts,
+      quizScore: score,
+      quizPassed: passed || progress.quizPassed,
+      certificateId: certificateId ?? progress.certificateId ?? null,
+    };
     setProgress((p) => ({ ...p, ...patch }));
     try {
       await updateCourseProgress(course.id, patch);

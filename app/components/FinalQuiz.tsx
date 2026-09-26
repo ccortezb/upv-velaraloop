@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getFinalQuizSet, submitFinalQuiz, type FinalQuizQuestion } from "@/lib/academy-api";
 
 interface QuizResult {
@@ -10,7 +10,8 @@ interface QuizResult {
   threshold: number;
   passed: boolean;
   credential: string | null;
-  review: { id: string; correct: boolean; answer: number; explanation: string | null }[];
+  certificateId: string | null;
+  review: { id: string; correct: boolean; answerText: string; explanation: string | null }[];
 }
 
 export default function FinalQuiz({
@@ -26,28 +27,35 @@ export default function FinalQuiz({
   attemptsUsed: number;
   maxAttempts: number;
   passed: boolean;
-  onFinish?: (passed: boolean, score: number) => void;
+  onFinish?: (passed: boolean, score: number, certificateId: string | null) => void;
 }) {
   const [questions, setQuestions] = useState<FinalQuizQuestion[]>([]);
   const [threshold, setThreshold] = useState(80);
   const [bankSize, setBankSize] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>({});
   const [result, setResult] = useState<QuizResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
+  const submittedRef = useRef(false);
 
   const attemptsLeft = Math.max(0, maxAttempts - attemptsUsed);
   const canStart = unlocked && !passed && attemptsLeft > 0;
+  const active = canStart && !result;
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    submittedRef.current = false;
     try {
       const set = await getFinalQuizSet(courseId);
       setQuestions(set.questions);
       setThreshold(set.threshold);
       setBankSize(set.bankSize);
+      setAnswers({});
+      setResult(null);
+      setSecondsLeft((set.timeLimitMinutes || 30) * 60);
     } catch {
       setError("No se pudo cargar el quiz final. Inicia sesión e intenta de nuevo.");
     } finally {
@@ -59,25 +67,41 @@ export default function FinalQuiz({
     if (canStart && questions.length === 0 && !loading && !error) load();
   }, [canStart, questions.length, loading, error, load]);
 
-  const answered = questions.filter((q) => answers[q.id] !== undefined).length;
-  const allAnswered = questions.length > 0 && answered === questions.length;
-  const reviewById = new Map((result?.review ?? []).map((r) => [r.id, r]));
-
-  const submit = async () => {
+  const doSubmit = useCallback(async () => {
+    if (submittedRef.current || questions.length === 0) return;
+    submittedRef.current = true;
     setBusy(true);
     setError(null);
     try {
       const res = await submitFinalQuiz(courseId, questions.map((q) => q.id), answers);
       setResult(res);
-      onFinish?.(res.passed, res.score);
+      setSecondsLeft(null);
+      onFinish?.(res.passed, res.score, res.certificateId);
     } catch {
       setError("No se pudo enviar el quiz. Intenta de nuevo.");
+      submittedRef.current = false;
     } finally {
       setBusy(false);
     }
-  };
+  }, [courseId, questions, answers, onFinish]);
 
-  // ── Locked state ──
+  // Countdown timer
+  useEffect(() => {
+    if (!active || secondsLeft === null) return;
+    if (secondsLeft <= 0) {
+      doSubmit();
+      return;
+    }
+    const t = setTimeout(() => setSecondsLeft((s) => (s === null ? null : s - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [active, secondsLeft, doSubmit]);
+
+  const mmss = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const answered = questions.filter((q) => answers[q.id] !== undefined).length;
+  const allAnswered = questions.length > 0 && answered === questions.length;
+  const reviewById = new Map((result?.review ?? []).map((r) => [r.id, r]));
+
+  // ── Locked ──
   if (!unlocked) {
     return (
       <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-6 text-center">
@@ -90,19 +114,25 @@ export default function FinalQuiz({
     );
   }
 
-  // ── Passed state ──
+  // ── Passed ──
   if (passed) {
+    const certId = result?.certificateId;
     return (
       <div className="rounded-lg border border-[var(--accent-green)]/40 bg-[var(--accent-green-muted)] p-6">
         <h3 className="mb-1 text-[var(--accent-green)]">🎉 ¡Aprobado!</h3>
         <p className="text-sm text-[var(--text-secondary)]">
-          Completaste AI Fluency.{" "}
-          <a
-            href="https://loop.upvelara.com/credential/?credential=ai-fluency"
-            className="text-[var(--brand-primary)] hover:underline"
-          >
-            Ver tu credential →
-          </a>
+          Completaste AI Fluency.
+          {certId ? (
+            <>
+              {" "}
+              <a
+                href={`https://loop.upvelara.com/credential/?id=${certId}`}
+                className="text-[var(--brand-primary)] hover:underline"
+              >
+                Ver tu certificado ({certId}) →
+              </a>
+            </>
+          ) : null}
         </p>
       </div>
     );
@@ -114,13 +144,13 @@ export default function FinalQuiz({
       <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-6 text-center">
         <h3 className="text-[var(--text-primary)]">Sin intentos disponibles</h3>
         <p className="mt-1 text-sm text-[var(--text-secondary)]">
-          Usaste tus {maxAttempts} intentos. Contacta a sandra@upvelara.com para una revisión manual.
+          Usaste tus {maxAttempts} intentos. Escríbenos a sandra@upvelara.com para una revisión manual.
         </p>
       </div>
     );
   }
 
-  // ── Result (after an attempt) ──
+  // ── Result ──
   if (result) {
     return (
       <div
@@ -140,42 +170,38 @@ export default function FinalQuiz({
           </span>
         </p>
         <p className="text-xs text-[var(--text-muted)]">
-          Intentos usados: {attemptsUsed}/{maxAttempts}
+          Intentos usados: {attemptsUsed + 1}/{maxAttempts}
         </p>
+        {result.passed && result.certificateId && (
+          <p className="mt-3 text-sm">
+            <a
+              href={`https://loop.upvelara.com/credential/?id=${result.certificateId}`}
+              className="text-[var(--brand-primary)] hover:underline"
+            >
+              Ver tu certificado ({result.certificateId}) →
+            </a>
+          </p>
+        )}
         {!result.passed && attemptsLeft > 0 && (
           <button
-            onClick={() => {
-              setResult(null);
-              setAnswers({});
-              setQuestions([]);
-              load();
-            }}
+            onClick={load}
             className="btn-lift mt-4 rounded-md bg-[var(--brand-primary)] px-4 py-2 text-sm font-semibold text-[var(--bg-base)]"
           >
             Usar otro intento ({attemptsLeft} restante{attemptsLeft === 1 ? "" : "s"})
           </button>
         )}
         <details className="mt-5">
-          <summary className="cursor-pointer text-sm text-[var(--text-secondary)]">
-            Ver revisión
-          </summary>
+          <summary className="cursor-pointer text-sm text-[var(--text-secondary)]">Ver revisión</summary>
           <div className="mt-3 space-y-2">
             {questions.map((q, i) => {
               const r = reviewById.get(q.id);
               return (
-                <div
-                  key={q.id}
-                  className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-sm"
-                >
+                <div key={q.id} className="rounded-md border border-[var(--border-default)] bg-[var(--bg-surface)] p-3 text-sm">
                   <p className="text-[var(--text-primary)]">
                     {r?.correct ? "✓" : "✗"} {i + 1}. {q.prompt}
                   </p>
-                  <p className="mt-1 text-xs text-[var(--text-secondary)]">
-                    Correcta: {q.options[r?.answer ?? 0]}
-                  </p>
-                  {r?.explanation && (
-                    <p className="mt-1 text-xs text-[var(--text-muted)]">{r.explanation}</p>
-                  )}
+                  <p className="mt-1 text-xs text-[var(--text-secondary)]">Correcta: {r?.answerText}</p>
+                  {r?.explanation && <p className="mt-1 text-xs text-[var(--text-muted)]">{r.explanation}</p>}
                 </div>
               );
             })}
@@ -185,19 +211,25 @@ export default function FinalQuiz({
     );
   }
 
-  // ── Active quiz ──
+  // ── Active ──
   return (
     <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-6">
-      <div className="mb-5 flex items-center justify-between">
+      <div className="mb-5 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-[var(--text-primary)]">Quiz final</h3>
           <p className="text-xs text-[var(--text-muted)]">
             {questions.length} de {bankSize} preguntas · umbral {threshold}% · intento {attemptsUsed + 1}/{maxAttempts}
           </p>
         </div>
-        <span className="text-xs text-[var(--text-muted)]">
-          {answered}/{questions.length}
-        </span>
+        {secondsLeft !== null && (
+          <span
+            className={`rounded-md px-3 py-1.5 font-mono text-sm font-semibold ${
+              secondsLeft <= 120 ? "bg-red-500/15 text-red-400" : "bg-[var(--bg-base)] text-[var(--text-secondary)]"
+            }`}
+          >
+            ⏱ {mmss(secondsLeft)}
+          </span>
+        )}
       </div>
 
       {loading && <div className="h-40 animate-pulse rounded-md bg-[var(--bg-surface-hover)]" />}
@@ -210,12 +242,12 @@ export default function FinalQuiz({
               {qi + 1}. {q.prompt}
             </p>
             <div className="space-y-1.5">
-              {q.options.map((opt, i) => {
-                const isChosen = answers[q.id] === i;
+              {q.options.map((opt) => {
+                const isChosen = answers[q.id] === opt;
                 return (
                   <button
-                    key={i}
-                    onClick={() => setAnswers((a) => ({ ...a, [q.id]: i }))}
+                    key={opt}
+                    onClick={() => setAnswers((a) => ({ ...a, [q.id]: opt }))}
                     className={`block w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                       isChosen
                         ? "border-[var(--brand-primary)] bg-[var(--brand-primary-muted)] text-[var(--brand-primary)]"
@@ -233,11 +265,15 @@ export default function FinalQuiz({
 
       {!loading && questions.length > 0 && (
         <button
-          onClick={submit}
-          disabled={!allAnswered || busy}
+          onClick={doSubmit}
+          disabled={busy}
           className="btn-lift mt-6 w-full rounded-md bg-[var(--brand-primary)] px-4 py-3 text-sm font-semibold text-[var(--bg-base)] hover:bg-[var(--brand-primary-hover)] disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {busy ? "Enviando…" : allAnswered ? "Enviar quiz final →" : `Responde las ${questions.length} preguntas`}
+          {busy
+            ? "Enviando…"
+            : allAnswered
+            ? "Enviar quiz final →"
+            : `Enviar (${answered}/${questions.length} respondidas)`}
         </button>
       )}
     </div>

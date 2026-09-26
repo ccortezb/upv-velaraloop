@@ -207,6 +207,7 @@ export async function getFinalQuizSet(courseId: string): Promise<{
   bankSize: number;
   threshold: number;
   attemptsAllowed: number;
+  timeLimitMinutes: number;
   questions: FinalQuizQuestion[];
 }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -219,7 +220,7 @@ export async function getFinalQuizSet(courseId: string): Promise<{
 export async function submitFinalQuiz(
   courseId: string,
   questionIds: string[],
-  answers: Record<string, number>
+  answers: Record<string, string>
 ): Promise<{
   score: number;
   correct: number;
@@ -227,7 +228,8 @@ export async function submitFinalQuiz(
   threshold: number;
   passed: boolean;
   credential: string | null;
-  review: { id: string; correct: boolean; answer: number; explanation: string | null }[];
+  certificateId: string | null;
+  review: { id: string; correct: boolean; answerText: string; explanation: string | null }[];
 }> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   Object.assign(headers, await authHeader());
@@ -237,6 +239,20 @@ export async function submitFinalQuiz(
     body: JSON.stringify({ questionIds, answers }),
   });
   if (!res.ok) throw new Error(`Quiz submit failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getCertificate(id: string): Promise<{
+  valid: boolean;
+  id: string;
+  name: string;
+  credential: string;
+  courseTitle: string | null;
+  score: number | null;
+  issuedAt: string | null;
+}> {
+  const res = await fetch(`${API_BASE}/academy/certificate/${id}`);
+  if (!res.ok) throw new Error(`Certificate fetch failed: ${res.status}`);
   return res.json();
 }
 
