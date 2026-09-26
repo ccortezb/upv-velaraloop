@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import GoogleLoginButton from "@/components/GoogleLoginButton";
-import { getMyCertificates, getCourses, type CourseSummary } from "@/lib/academy-api";
+import { getMyCertificates, getCourses, getProgress, claimCertificate, type CourseSummary } from "@/lib/academy-api";
 
 export default function CertificatesPage() {
   const { user, loading: authLoading } = useAuth();
-  const [certs, setCerts] = useState<{ courseId: string; certificateId: string }[]>([]);
+  const [certs, setCerts] = useState<{ courseId: string; certificateId: string; courseTitle?: string }[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,16 +19,33 @@ export default function CertificatesPage() {
       return;
     }
     Promise.all([getMyCertificates(), getCourses().catch(() => ({ courses: [] }))])
-      .then(([c, co]) => {
-        setCerts(c);
+      .then(async ([c, co]) => {
         setCourses(co.courses ?? []);
+        if (c.length === 0) {
+          // Backfill: courses the user passed but with no certificate yet
+          try {
+            const prog = await getProgress();
+            const pending = Object.entries(prog).filter(
+              ([, v]) => v && typeof v === "object" && (v as any).quizPassed && !(v as any).certificateId
+            );
+            if (pending.length > 0) {
+              await Promise.all(pending.map(([courseId]) => claimCertificate(courseId, true).catch(() => null)));
+              const fresh = await getMyCertificates();
+              setCerts(fresh);
+              return;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        setCerts(c);
       })
       .catch(() => setCerts([]))
       .finally(() => setLoading(false));
   }, [user, authLoading]);
 
-  const titleFor = (courseId: string) =>
-    courses.find((c) => c.id === courseId || c.slug === courseId)?.title ?? courseId.replace(/-/g, " ");
+  const titleFor = (courseId: string, fallback?: string) =>
+    fallback || courses.find((c) => c.id === courseId || c.slug === courseId)?.title || courseId.replace(/-/g, " ");
 
   if (authLoading || loading) {
     return (
@@ -79,7 +96,7 @@ export default function CertificatesPage() {
               <div className="flex items-center gap-3">
                 <span className="text-2xl">🏅</span>
                 <div>
-                  <h3 className="text-[var(--text-primary)]">{titleFor(c.courseId)}</h3>
+                  <h3 className="text-[var(--text-primary)]">{titleFor(c.courseId, c.courseTitle)}</h3>
                   <p className="text-xs text-[var(--text-muted)]">ID {c.certificateId}</p>
                 </div>
               </div>

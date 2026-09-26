@@ -14,6 +14,7 @@ import {
   enroll,
   markLessonComplete,
   updateCourseProgress,
+  claimCertificate,
   trackLabel,
   priceLabel,
   type AcademyCourse,
@@ -67,6 +68,18 @@ export default function CourseClient({ slug }: { slug: string }) {
         const done = Array.isArray(cp.completedLessons) ? cp.completedLessons : [];
         setCompleted(done);
         setQuizDone(new Set(done));
+
+        // Backfill: if the user already passed but has no certificate, claim one.
+        if (cp.quizPassed && !cp.certificateId) {
+          claimCertificate(data.id, true)
+            .then(async (certId) => {
+              if (certId) {
+                setProgress((p) => ({ ...p, certificateId: certId }));
+                await updateCourseProgress(data.id, { certificateId: certId });
+              }
+            })
+            .catch(() => {});
+        }
       }
     } catch {
       setError("No se pudo cargar el curso.");

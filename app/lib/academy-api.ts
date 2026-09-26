@@ -259,13 +259,37 @@ export async function getCertificate(id: string): Promise<{
 export interface MyCertificate {
   courseId: string;
   certificateId: string;
+  courseTitle?: string;
+  credential?: string;
+  issuedAt?: string;
 }
 
 export async function getMyCertificates(): Promise<MyCertificate[]> {
-  const prog = await getProgress();
-  return Object.entries(prog)
-    .filter(([, v]) => v && typeof v === "object" && (v as any).certificateId)
-    .map(([courseId, v]) => ({ courseId, certificateId: (v as any).certificateId as string }));
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  Object.assign(headers, await authHeader());
+  const res = await fetch(`${API_BASE}/academy/certificates`, { headers });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.certificates ?? []).map((c: any) => ({
+    courseId: c.courseId,
+    certificateId: c.id,
+    courseTitle: c.courseTitle,
+    credential: c.credential,
+    issuedAt: c.issuedAt,
+  }));
+}
+
+export async function claimCertificate(courseId: string, clientPassed = false): Promise<string | null> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  Object.assign(headers, await authHeader());
+  const res = await fetch(`${API_BASE}/academy/certificate/claim`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ courseId, clientPassed }),
+  });
+  if (!res.ok) return null;
+  const data = await res.json().catch(() => ({}));
+  return data.certificateId ?? null;
 }
 
 export function trackLabel(track: "A" | "B" | "C"): string {
