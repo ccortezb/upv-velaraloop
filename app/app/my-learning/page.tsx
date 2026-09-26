@@ -48,7 +48,12 @@ export default function MyLearningPage() {
       <p className="mb-1 text-xs font-semibold uppercase tracking-widest text-[var(--brand-primary)]">
         VelaraLoop Academy
       </p>
-      <h1 className="mb-8">Mi aprendizaje</h1>
+      <h1 className="mb-2">Mi aprendizaje</h1>
+      <p className="mb-8 text-sm text-[var(--text-secondary)]">
+        <a href="/certificates" className="text-[var(--brand-primary)] hover:underline">
+          🏅 Ver mis certificados →
+        </a>
+      </p>
 
       {enrollments.length === 0 ? (
         <div className="rounded-lg border border-[var(--border-default)] bg-[var(--bg-surface)] p-8 text-center">

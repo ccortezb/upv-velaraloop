@@ -256,6 +256,18 @@ export async function getCertificate(id: string): Promise<{
   return res.json();
 }
 
+export interface MyCertificate {
+  courseId: string;
+  certificateId: string;
+}
+
+export async function getMyCertificates(): Promise<MyCertificate[]> {
+  const prog = await getProgress();
+  return Object.entries(prog)
+    .filter(([, v]) => v && typeof v === "object" && (v as any).certificateId)
+    .map(([courseId, v]) => ({ courseId, certificateId: (v as any).certificateId as string }));
+}
+
 export function trackLabel(track: "A" | "B" | "C"): string {
   return { A: "AI Fluency", B: "Agent Automation", C: "Governance & Escala" }[track] ?? track;
 }

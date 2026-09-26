@@ -56,6 +56,16 @@ export default function Navbar() {
           ) : user ? (
             <>
               <Link
+                href="/certificates"
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  isActive("/certificates")
+                    ? "bg-[var(--brand-primary-muted)] text-[var(--brand-primary)]"
+                    : "text-[var(--text-secondary)] hover:bg-[var(--bg-surface-hover)]"
+                }`}
+              >
+                Certificados
+              </Link>
+              <Link
                 href="/my-learning"
                 className={`rounded-md px-3 py-1.5 text-sm font-medium ${
                   isActive("/my-learning")
